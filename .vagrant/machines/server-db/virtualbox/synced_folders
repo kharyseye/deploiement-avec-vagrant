@@ -1,0 +1,1 @@
+{"virtualbox":{"/opt/postgresql/":{"guestpath":"/opt/postgresql","hostpath":"/Users/kharyseye/vagrant/tp_deploiement/postgresql","disabled":false,"__vagrantfile":true},"/vagrant":{"guestpath":"/vagrant","hostpath":"/Users/kharyseye/vagrant/tp_deploiement","disabled":false,"__vagrantfile":true}}}
