@@ -21,14 +21,18 @@ Vagrant.configure("2") do |config|
 
     devapp01.vm.provision "shell", inline: <<-SHELL
     
-    sudo apt-get update
-    #installation de git java et tomcat9 sur devapp01
-    sudo apt-get install -y git
-    sudo apt-get install -y default-jdk
-    sudo apt-get install -y tomcat9
-    #il faut installer postgresql client pour pouvoir utiliser la commande psql sur devapp01
-    sudo apt-get install -y postgresql-client
-  SHELL
+      sudo apt-get update
+      #installation de git java et tomcat9 sur devapp01
+      sudo apt-get install -y git
+      sudo apt-get install -y default-jdk
+      sudo apt-get install -y tomcat9
+      #il faut installer postgresql client pour pouvoir utiliser la commande psql sur devapp01
+      sudo apt-get install -y postgresql-client
+      #creation du repertoir de notre code source
+      mkdir -p /home/vagrant/TP1
+       #tache cron pour sauvegarder le code toutes les heures
+      echo "0 * * * * rsync -avz /home/vagrant/TP1 vagrant@172.16.238.12:/home/vagrant/TP1_backup/backup_code" | sudo crontab -
+    SHELL
 
     devapp01.vm.provider "virtualbox" do |vb|
 
@@ -54,22 +58,37 @@ Vagrant.configure("2") do |config|
 
     dbapp01.vm.provision "shell", inline: <<-SHELL
   
-    sudo apt-get update
-    #je commence par installer postgresql sur cette machine 
-    sudo apt-get install -y postgresql postgresql-contrib
-    #je change le mot de passe de mon superUtilisateur 
-    sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'passer';"
-    #configuration du fichier postgresql.conf
-    #dans listen addresses il faut ajouter l'adresse du serveur ou notre SGBD est installe
-    sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '172.16.238.11'/" /etc/postgresql/14/main/postgresql.conf
-    #configuration du fichier pg_hba.conf
-    #sur ce fichier je dois ajouter ajouter le host le nom de ma base l'utilisateur l'@IP ainsi que la methode de connexion
-    echo "host    userdb      postgres         172.16.238.10/24      md5" | sudo tee -a /etc/postgresql/14/main/pg_hba.conf
-    #il faut imperativement redemarrer postgresql pour que les modifications soit prises en compte
-    #Sisi cette etape est importante ;) donc faites le haha
-    sudo systemctl restart postgresql
-    #creation de ma base userdb j'aurais pu le faire avant aussi !
-    sudo -u postgres psql -c "CREATE DATABASE userdb";
+      sudo apt-get update
+      #je commence par installer postgresql sur cette machine 
+      sudo apt-get install -y postgresql postgresql-contrib
+
+      #je change le mot de passe de mon superUtilisateur 
+      sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'passer';"
+
+      #configuration du fichier postgresql.conf
+      #dans listen addresses il faut ajouter l'adresse du serveur ou notre SGBD est installe
+      sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '172.16.238.11'/" /etc/postgresql/14/main/postgresql.conf
+      
+      #configuration du fichier pg_hba.conf
+      #sur ce fichier je dois ajouter ajouter le host le nom de ma base l'utilisateur l'@IP ainsi que la methode de connexion
+      echo "host    userdb      postgres         172.16.238.10/24      md5" | sudo tee -a /etc/postgresql/14/main/pg_hba.conf
+      
+      #il faut imperativement redemarrer postgresql pour que les modifications soit prises en compte
+      #Sisi cette etape est importante ;) donc faites le haha
+      sudo systemctl restart postgresql
+
+      #creation de ma base userdb j'aurais pu le faire avant aussi !
+      sudo -u postgres psql -c "CREATE DATABASE userdb";
+
+      #un script pour sauvegarder la bd
+      echo '#!/bin/bash' > /usr/local/bin/backup_database.sh
+      echo 'pg_dump -U postgres userdb > /home/vagrant/TP1_backup/backup_database_$(date +%Y%m%d%H%M%S).sql' >> /usr/local/bin/backup_database.sh
+      echo 'scp /home/vagrant/TP1_backup/backup_database_$(date +%Y%m%d%H%M%S).sql vagrant@172.16.238.12:/home/vagrant/TP1_backup/backup_database' >> /usr/local/bin/backup_database.sh
+      chmod +x /usr/local/bin/backup_database.sh
+
+      #Ajout d'une tache cron pour executer le script toutes les 30 minutes
+      echo "*/30 * * * * /usr/local/bin/backup_database.sh" | sudo crontab -
+
     SHELL
 
     dbapp01.vm.provider "virtualbox" do |vb|
@@ -87,10 +106,17 @@ Vagrant.configure("2") do |config|
     backup01.vm.hostname = "backup01"
 
     backup01.vm.box_check_update = false
-
+    
     backup01.vm.network "forwarded_port", guest: 8080, host: 8084
 
     backup01.vm.network "private_network", type: "static", ip: "172.16.238.12"
+
+    backup01.vm.provision "shell", inline: <<-SHELL
+  
+      mkdir -p /home/vagrant/TP1_backup/backup_code
+      mkdir -p /home/vagrant/TP1_backup/backup_database
+      
+    SHELL
 
     backup01.vm.provider "virtualbox" do |vb|
 
